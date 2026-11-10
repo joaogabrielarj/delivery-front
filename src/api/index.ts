@@ -148,7 +148,7 @@ export async function criarPedido(
     status: "em_preparo",
     criadoEm: new Date().toISOString(),
   };
-  gravarPedidos([pedido, ...lerPedidos()]);
+  // O pedido só é guardado quando o pagamento é aprovado (ver guardarPagamento).
   return pedido;
 }
 
@@ -220,7 +220,7 @@ export async function pagar(
         cartaoFinal: r.cartao_final,
         criadoEm: r.criado_em,
       };
-      guardarPagamento(aprovado);
+      guardarPagamento(pedido, aprovado);
       return aprovado;
     } catch (e) {
       if (e instanceof ErroApi && e.codigo === "PAGAMENTO_RECUSADO") {
@@ -234,6 +234,10 @@ export async function pagar(
     }
   }
   await espera(900);
+  if (metodo === "cartao_credito") {
+    const problema = validarCartao(cartao);
+    if (problema) throw new ErroApi(problema, 422);
+  }
   const final = (cartao?.numero ?? "").replace(/\D/g, "").slice(-4);
   if (metodo === "cartao_credito" && final === "0002") {
     return { id: "", pedidoId: pedido.id, status: "recusado", motivoRecusa: "Saldo insuficiente." };
@@ -252,13 +256,13 @@ export async function pagar(
     cartaoFinal: metodo === "cartao_credito" ? final : null,
     criadoEm: new Date().toISOString(),
   };
-  guardarPagamento(pagamento);
+  guardarPagamento(pedido, pagamento);
   return pagamento;
 }
 
 // O comprovante lê o pagamento guardado junto do pedido.
-function guardarPagamento(pagamento: Pagamento) {
-  gravarPedidos(lerPedidos().map((p) => (p.id === pagamento.pedidoId ? { ...p, pagamento } : p)));
+function guardarPagamento(pedido: Pedido, pagamento: Pagamento) {
+  gravarPedidos([{ ...pedido, pagamento }, ...lerPedidos().filter((p) => p.id !== pedido.id)]);
 }
 
 export async function avaliar(nova: NovaAvaliacao, usuario: Usuario): Promise<void> {
@@ -282,4 +286,18 @@ export async function avaliar(nova: NovaAvaliacao, usuario: Usuario): Promise<vo
     return;
   }
   await espera(500);
+}
+
+// Validação de formato (não confere o número com o emissor).
+export function validarCartao(c: DadosCartao | null): string | null {
+  if (!c) return "Informe os dados do cartão.";
+  const numero = c.numero.replace(/\s/g, "");
+  if (!/^\d{13,19}$/.test(numero)) return "Número do cartão inválido: use de 13 a 19 dígitos.";
+  if (c.titular.trim().length < 3) return "Informe o nome impresso no cartão.";
+  const m = /^(\d{2})\/(\d{2})$/.exec(c.validade.trim());
+  if (!m || Number(m[1]) < 1 || Number(m[1]) > 12) return "Validade inválida: use o formato MM/AA.";
+  const fim = new Date(2000 + Number(m[2]), Number(m[1]), 1);
+  if (fim <= new Date()) return "Cartão vencido.";
+  if (!/^\d{3,4}$/.test(c.cvv)) return "CVV inválido: use 3 ou 4 dígitos.";
+  return null;
 }
