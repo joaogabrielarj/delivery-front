@@ -9,15 +9,17 @@ const destino = (porta: number) => ({
   rewrite: (caminho: string) => caminho.replace(/^\/api\/[a-z]+/, ''),
 })
 
+const proxy = {
+  '/api/identidade': destino(8001),
+  '/api/pedidos': destino(8008),
+  '/api/pagamentos': destino(8013),
+  '/api/avaliacoes': destino(8015),
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  server: {
-    proxy: {
-      '/api/identidade': destino(8001),
-      '/api/pedidos': destino(8008),
-      '/api/pagamentos': destino(8013),
-      '/api/avaliacoes': destino(8015),
-    },
-  },
+  server: { proxy },
+  // `npm run build && npm run preview` serve o build de produção; os domínios de túnel são liberados para testar no celular.
+  preview: { proxy, allowedHosts: ['.trycloudflare.com', '.ngrok-free.app', '.ngrok-free.dev', '.ngrok.app'] },
 })
