@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Cupom, ItemCardapio, ItemCarrinho, Restaurante, Usuario } from "./api/types";
 
 export const reais = (centavos: number) =>
@@ -44,9 +44,18 @@ const CarrinhoCtx = createContext<Carrinho | null>(null);
 
 export function Provedores({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(() => lerLocal<Usuario>("zeppel.usuario"));
-  const [restaurante, setRestaurante] = useState<Restaurante | null>(null);
-  const [itens, setItens] = useState<ItemCarrinho[]>([]);
-  const [cupom, setCupom] = useState<Cupom | null>(null);
+  // O carrinho sobrevive a recarregar a página.
+  const salvo = useMemo(
+    () => lerLocal<{ restaurante: Restaurante | null; itens: ItemCarrinho[]; cupom: Cupom | null }>("zeppel.carrinho"),
+    [],
+  );
+  const [restaurante, setRestaurante] = useState<Restaurante | null>(salvo?.restaurante ?? null);
+  const [itens, setItens] = useState<ItemCarrinho[]>(salvo?.itens ?? []);
+  const [cupom, setCupom] = useState<Cupom | null>(salvo?.cupom ?? null);
+
+  useEffect(() => {
+    gravarLocal("zeppel.carrinho", itens.length ? { restaurante, itens, cupom } : null);
+  }, [restaurante, itens, cupom]);
 
   const entrarCom = useCallback((u: Usuario) => {
     setUsuario(u);

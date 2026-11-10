@@ -50,7 +50,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .topo__nav { display: flex; align-items: center; gap: 18px; }
 .topo__nav a, .link { color: #fff; text-decoration: none; font-weight: 700; background: none; border: 0; cursor: pointer; padding: 0; }
 .topo__nav a.active { text-decoration: underline; text-underline-offset: 6px; }
-.sacola { background: #fff; color: var(--marca-escura) !important; padding: 8px 14px; border-radius: 999px; }
+.topo__nav a.sacola { background: #fff; color: var(--marca-escura) !important; padding: 8px 14px; border-radius: 999px; }
 .sacola__valor { margin-left: 8px; font-weight: 600; }
 .conteudo {
   width: 100%; max-width: 1080px; margin: 0 auto; flex: 1;
