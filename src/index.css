@@ -170,3 +170,14 @@ input, textarea { width: 100%; padding: 12px 14px; border: 1px solid #cfc9c6; bo
 @media (prefers-reduced-motion: reduce) {
   .mapa__moto { transition: none; }
 }
+
+/* comprovante */
+.comprovante { border-style: dashed; border-width: 2px; }
+.comprovante h2 { margin-bottom: 4px; }
+.comprovante__status { color: var(--ok); font-weight: 800; margin-bottom: 10px; }
+.comprovante dl { margin: 0 0 10px; display: flex; flex-direction: column; gap: 6px; }
+.comprovante dl div { display: flex; justify-content: space-between; gap: 12px; }
+.comprovante dt { color: var(--mudo); }
+.comprovante dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; min-width: 0; overflow-wrap: anywhere; }
+.comprovante .mono { font-family: ui-monospace, Consolas, monospace; font-size: 14px; }
+.comprovante__nota { font-size: 13px; margin: 0; }

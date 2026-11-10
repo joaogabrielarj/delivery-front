@@ -130,12 +130,14 @@ export async function criarPedido(
   restaurante: Restaurante,
   itens: ItemCarrinho[],
   cupom: Cupom | null,
+  clienteId: string,
 ): Promise<Pedido> {
   await espera();
   const subtotal = itens.reduce((s, x) => s + x.item.precoCentavos * x.quantidade, 0);
   const desconto = cupom ? Math.round((subtotal * cupom.descontoPercentual) / 100) : 0;
   const pedido: Pedido = {
     id: `ped-${Date.now().toString(36)}`,
+    clienteId,
     restauranteId: restaurante.id,
     restauranteNome: restaurante.nome,
     itens,
@@ -150,14 +152,17 @@ export async function criarPedido(
   return pedido;
 }
 
-export async function obterPedido(id: string): Promise<Pedido | null> {
-  const p = lerPedidos().find((x) => x.id === id);
+// Pedidos são do cliente que os fez: sem login ou com outra conta, não aparecem.
+export async function obterPedido(id: string, clienteId: string): Promise<Pedido | null> {
+  const p = lerPedidos().find((x) => x.id === id && x.clienteId === clienteId);
   if (!p) return null;
   return { ...p, status: statusPorTempo(p.criadoEm) };
 }
 
-export async function listarPedidos(): Promise<Pedido[]> {
-  return lerPedidos().map((p) => ({ ...p, status: statusPorTempo(p.criadoEm) }));
+export async function listarPedidos(clienteId: string): Promise<Pedido[]> {
+  return lerPedidos()
+    .filter((p) => p.clienteId === clienteId)
+    .map((p) => ({ ...p, status: statusPorTempo(p.criadoEm) }));
 }
 
 // ---------- Eq. 4: Logística (rastreio simulado pelo tempo) ----------
@@ -197,13 +202,26 @@ export async function pagar(
           status: "confirmado",
         },
       });
-      const r = await http<{ id: string }>(PAGAMENTOS(), "/v1/pagamentos", {
-        metodo: "POST",
-        token: usuario.token,
-        chave: `pedido-${pedido.id}`,
-        corpo: { pedido_id: pedido.id, metodo, cartao: metodo === "cartao_credito" ? cartao : undefined },
-      });
-      return { id: r.id, pedidoId: pedido.id, status: "aprovado" };
+      const r = await http<{ id: string; metodo: MetodoPagamento; cartao_final: string | null; criado_em: string }>(
+        PAGAMENTOS(),
+        "/v1/pagamentos",
+        {
+          metodo: "POST",
+          token: usuario.token,
+          chave: `pedido-${pedido.id}`,
+          corpo: { pedido_id: pedido.id, metodo, cartao: metodo === "cartao_credito" ? cartao : undefined },
+        },
+      );
+      const aprovado: Pagamento = {
+        id: r.id,
+        pedidoId: pedido.id,
+        status: "aprovado",
+        metodo: r.metodo,
+        cartaoFinal: r.cartao_final,
+        criadoEm: r.criado_em,
+      };
+      guardarPagamento(aprovado);
+      return aprovado;
     } catch (e) {
       if (e instanceof ErroApi && e.codigo === "PAGAMENTO_RECUSADO") {
         const motivos: Record<string, string> = {
@@ -226,9 +244,21 @@ export async function pagar(
   if (pedido.totalCentavos > 500000) {
     return { id: "", pedidoId: pedido.id, status: "recusado", motivoRecusa: "Em análise antifraude." };
   }
-  const pagamento: Pagamento = { id: `pag-${Date.now().toString(36)}`, pedidoId: pedido.id, status: "aprovado" };
-  gravarPedidos(lerPedidos().map((p) => (p.id === pedido.id ? { ...p, pagamentoId: pagamento.id } : p)));
+  const pagamento: Pagamento = {
+    id: crypto.randomUUID(),
+    pedidoId: pedido.id,
+    status: "aprovado",
+    metodo,
+    cartaoFinal: metodo === "cartao_credito" ? final : null,
+    criadoEm: new Date().toISOString(),
+  };
+  guardarPagamento(pagamento);
   return pagamento;
+}
+
+// O comprovante lê o pagamento guardado junto do pedido.
+function guardarPagamento(pagamento: Pagamento) {
+  gravarPedidos(lerPedidos().map((p) => (p.id === pagamento.pedidoId ? { ...p, pagamento } : p)));
 }
 
 export async function avaliar(nova: NovaAvaliacao, usuario: Usuario): Promise<void> {

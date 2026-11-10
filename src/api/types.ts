@@ -53,6 +53,7 @@ export type StatusPedido = "em_preparo" | "saiu_para_entrega" | "entregue";
 
 export interface Pedido {
   id: string;
+  clienteId: string;
   restauranteId: string;
   restauranteNome: string;
   itens: ItemCarrinho[];
@@ -61,7 +62,7 @@ export interface Pedido {
   freteCentavos: number;
   totalCentavos: number;
   status: StatusPedido;
-  pagamentoId?: string;
+  pagamento?: Pagamento;
   criadoEm: string;
 }
 
@@ -70,6 +71,9 @@ export interface Pagamento {
   pedidoId: string;
   status: "aprovado" | "recusado";
   motivoRecusa?: string;
+  metodo?: MetodoPagamento;
+  cartaoFinal?: string | null;
+  criadoEm?: string;
 }
 
 export interface Rastreio {

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { avaliar, ErroApi, listarPedidos, obterPedido, obterRastreio } from "../api";
-import type { Pedido, Rastreio, StatusPedido } from "../api/types";
+import type { Pagamento, Pedido, Rastreio, StatusPedido } from "../api/types";
 import { reais, useSessao } from "../store";
 
 const etapas: { id: StatusPedido; titulo: string }[] = [
@@ -30,6 +30,27 @@ function Estrelas({ valor, onChange, nome }: { valor: number; onChange: (n: numb
   );
 }
 
+function Comprovante({ pedido, pagamento }: { pedido: Pedido; pagamento: Pagamento }) {
+  const metodo =
+    pagamento.metodo === "pix" ? "Pix" : `Cartão de crédito${pagamento.cartaoFinal ? ` final ${pagamento.cartaoFinal}` : ""}`;
+  const data = pagamento.criadoEm ? new Date(pagamento.criadoEm).toLocaleString("pt-BR") : "";
+  return (
+    <section className="cartao comprovante" aria-label="Comprovante de pagamento">
+      <h2>Comprovante de pagamento</h2>
+      <p className="comprovante__status">Pagamento aprovado</p>
+      <dl>
+        <div><dt>Número do pagamento</dt><dd className="mono">{pagamento.id.slice(0, 8).toUpperCase()}</dd></div>
+        <div><dt>Pedido</dt><dd className="mono">{pedido.id}</dd></div>
+        <div><dt>Restaurante</dt><dd>{pedido.restauranteNome}</dd></div>
+        <div><dt>Data e hora</dt><dd>{data}</dd></div>
+        <div><dt>Forma de pagamento</dt><dd>{metodo}</dd></div>
+        <div className="total"><dt>Valor pago</dt><dd>{reais(pedido.totalCentavos)}</dd></div>
+      </dl>
+      <p className="mudo comprovante__nota">Este comprovante confirma o pagamento e não substitui a nota fiscal do restaurante.</p>
+    </section>
+  );
+}
+
 export function PedidoPage() {
   const { id = "" } = useParams();
   const { usuario } = useSessao();
@@ -41,10 +62,12 @@ export function PedidoPage() {
   const [msg, setMsg] = useState("");
   const [avaliado, setAvaliado] = useState(false);
 
+  const clienteId = usuario?.id;
   useEffect(() => {
+    if (!clienteId) return;
     let ativo = true;
     const atualizar = async () => {
-      const p = await obterPedido(id);
+      const p = await obterPedido(id, clienteId);
       if (!ativo) return;
       setPedido(p);
       if (p) setRastreio(await obterRastreio(id));
@@ -55,8 +78,9 @@ export function PedidoPage() {
       ativo = false;
       clearInterval(t);
     };
-  }, [id]);
+  }, [id, clienteId]);
 
+  if (!usuario) return <PedeLogin voltar={`/pedido/${id}`} texto="Entre na sua conta para ver este pedido." />;
   if (pedido === undefined) return <p className="vazio">Carregando pedido…</p>;
   if (pedido === null)
     return (
@@ -106,6 +130,8 @@ export function PedidoPage() {
           ) : null}
         </section>
 
+        {pedido.pagamento ? <Comprovante pedido={pedido} pagamento={pedido.pagamento} /> : null}
+
         {pedido.status === "entregue" ? (
           <section className="cartao">
             <h2>Como foi o pedido?</h2>
@@ -148,11 +174,26 @@ export function PedidoPage() {
   );
 }
 
+function PedeLogin({ voltar, texto }: { voltar: string; texto: string }) {
+  return (
+    <section className="cartao cartao--estreito">
+      <h1>Entre para continuar</h1>
+      <p className="mudo">{texto}</p>
+      <Link to={`/entrar?voltar=${voltar}`} className="botao">
+        Entrar
+      </Link>
+    </section>
+  );
+}
+
 export function PedidosPage() {
+  const { usuario } = useSessao();
   const [pedidos, setPedidos] = useState<Pedido[] | null>(null);
+  const clienteId = usuario?.id;
   useEffect(() => {
-    void listarPedidos().then(setPedidos);
-  }, []);
+    if (clienteId) void listarPedidos(clienteId).then(setPedidos);
+  }, [clienteId]);
+  if (!usuario) return <PedeLogin voltar="/pedidos" texto="Entre na sua conta para ver seus pedidos." />;
   if (pedidos === null) return <p className="vazio">Carregando pedidos…</p>;
   return (
     <section>
