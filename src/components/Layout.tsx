@@ -3,7 +3,11 @@ import { reais, useCarrinho, useSessao } from "../store";
 
 export function Layout() {
   const { usuario, sair } = useSessao();
-  const { quantidadeTotal, subtotalCentavos } = useCarrinho();
+  const { quantidadeTotal, subtotalCentavos, limpar } = useCarrinho();
+  const sairDaConta = () => {
+    limpar();
+    sair();
+  };
 
   return (
     <div className="app">
@@ -18,7 +22,7 @@ export function Layout() {
           <nav className="topo__nav" aria-label="Principal">
             <NavLink to="/pedidos">Pedidos</NavLink>
             {usuario ? (
-              <button type="button" className="link" onClick={sair}>
+              <button type="button" className="link" onClick={sairDaConta}>
                 Sair ({usuario.nome})
               </button>
             ) : (

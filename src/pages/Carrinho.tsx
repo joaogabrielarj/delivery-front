@@ -54,7 +54,7 @@ export function Carrinho() {
     setErro("");
     setEnviando(true);
     try {
-      const pedido = await criarPedido(restaurante, c.itens, c.cupom);
+      const pedido = await criarPedido(restaurante, c.itens, c.cupom, usuario.id);
       const pagamento = await pagar(pedido, metodo, metodo === "cartao_credito" ? cartao : null, usuario);
       if (pagamento.status === "recusado") {
         setErro(`Pagamento recusado: ${pagamento.motivoRecusa ?? "tente outro cartão"}.`);

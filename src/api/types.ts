@@ -53,6 +53,7 @@ export type StatusPedido = "em_preparo" | "saiu_para_entrega" | "entregue";
 
 export interface Pedido {
   id: string;
+  clienteId: string;
   restauranteId: string;
   restauranteNome: string;
   itens: ItemCarrinho[];

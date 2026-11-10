@@ -130,12 +130,14 @@ export async function criarPedido(
   restaurante: Restaurante,
   itens: ItemCarrinho[],
   cupom: Cupom | null,
+  clienteId: string,
 ): Promise<Pedido> {
   await espera();
   const subtotal = itens.reduce((s, x) => s + x.item.precoCentavos * x.quantidade, 0);
   const desconto = cupom ? Math.round((subtotal * cupom.descontoPercentual) / 100) : 0;
   const pedido: Pedido = {
     id: `ped-${Date.now().toString(36)}`,
+    clienteId,
     restauranteId: restaurante.id,
     restauranteNome: restaurante.nome,
     itens,
@@ -150,14 +152,17 @@ export async function criarPedido(
   return pedido;
 }
 
-export async function obterPedido(id: string): Promise<Pedido | null> {
-  const p = lerPedidos().find((x) => x.id === id);
+// Pedidos são do cliente que os fez: sem login ou com outra conta, não aparecem.
+export async function obterPedido(id: string, clienteId: string): Promise<Pedido | null> {
+  const p = lerPedidos().find((x) => x.id === id && x.clienteId === clienteId);
   if (!p) return null;
   return { ...p, status: statusPorTempo(p.criadoEm) };
 }
 
-export async function listarPedidos(): Promise<Pedido[]> {
-  return lerPedidos().map((p) => ({ ...p, status: statusPorTempo(p.criadoEm) }));
+export async function listarPedidos(clienteId: string): Promise<Pedido[]> {
+  return lerPedidos()
+    .filter((p) => p.clienteId === clienteId)
+    .map((p) => ({ ...p, status: statusPorTempo(p.criadoEm) }));
 }
 
 // ---------- Eq. 4: Logística (rastreio simulado pelo tempo) ----------

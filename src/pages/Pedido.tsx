@@ -62,10 +62,12 @@ export function PedidoPage() {
   const [msg, setMsg] = useState("");
   const [avaliado, setAvaliado] = useState(false);
 
+  const clienteId = usuario?.id;
   useEffect(() => {
+    if (!clienteId) return;
     let ativo = true;
     const atualizar = async () => {
-      const p = await obterPedido(id);
+      const p = await obterPedido(id, clienteId);
       if (!ativo) return;
       setPedido(p);
       if (p) setRastreio(await obterRastreio(id));
@@ -76,8 +78,9 @@ export function PedidoPage() {
       ativo = false;
       clearInterval(t);
     };
-  }, [id]);
+  }, [id, clienteId]);
 
+  if (!usuario) return <PedeLogin voltar={`/pedido/${id}`} texto="Entre na sua conta para ver este pedido." />;
   if (pedido === undefined) return <p className="vazio">Carregando pedido…</p>;
   if (pedido === null)
     return (
@@ -171,11 +174,26 @@ export function PedidoPage() {
   );
 }
 
+function PedeLogin({ voltar, texto }: { voltar: string; texto: string }) {
+  return (
+    <section className="cartao cartao--estreito">
+      <h1>Entre para continuar</h1>
+      <p className="mudo">{texto}</p>
+      <Link to={`/entrar?voltar=${voltar}`} className="botao">
+        Entrar
+      </Link>
+    </section>
+  );
+}
+
 export function PedidosPage() {
+  const { usuario } = useSessao();
   const [pedidos, setPedidos] = useState<Pedido[] | null>(null);
+  const clienteId = usuario?.id;
   useEffect(() => {
-    void listarPedidos().then(setPedidos);
-  }, []);
+    if (clienteId) void listarPedidos(clienteId).then(setPedidos);
+  }, [clienteId]);
+  if (!usuario) return <PedeLogin voltar="/pedidos" texto="Entre na sua conta para ver seus pedidos." />;
   if (pedidos === null) return <p className="vazio">Carregando pedidos…</p>;
   return (
     <section>
