@@ -21,18 +21,21 @@ type Equipe = "IDENTIDADE" | "CATALOGO" | "PEDIDOS" | "LOGISTICA" | "FINANCEIRO"
 
 const env = import.meta.env as Record<string, string | undefined>;
 const modoReal = (e: Equipe) => env[`VITE_MODE_${e}`] === "real";
-const urlDe = (e: Equipe) => env[`VITE_${e}_URL`] ?? "";
-const PAGAMENTOS = () => env.VITE_PAGAMENTOS_URL ?? "http://localhost:8013";
-const AVALIACOES = () => env.VITE_AVALIACOES_URL ?? "http://localhost:8015";
+const urlDe = (e: Equipe) => env[`VITE_${e}_URL`] ?? `/api/${e.toLowerCase()}`;
+const PAGAMENTOS = () => env.VITE_PAGAMENTOS_URL ?? "/api/pagamentos";
+const AVALIACOES = () => env.VITE_AVALIACOES_URL ?? "/api/avaliacoes";
+const PEDIDOS_MOCK = () => env.VITE_PEDIDOS_URL ?? "/api/pedidos";
 const espera = (ms = 350) => new Promise((r) => setTimeout(r, ms));
 
 export class ErroApi extends Error {
   status: number;
   codigo?: string;
-  constructor(mensagem: string, status = 0, codigo?: string) {
+  motivo?: string;
+  constructor(mensagem: string, status = 0, codigo?: string, motivo?: string) {
     super(mensagem);
     this.status = status;
     this.codigo = codigo;
+    this.motivo = motivo;
   }
 }
 
@@ -56,7 +59,7 @@ async function http<T>(
   }
   const dados = (await resp.json().catch(() => ({}))) as Record<string, unknown>;
   if (!resp.ok) {
-    throw new ErroApi(String(dados.mensagem ?? "Algo deu errado."), resp.status, dados.codigo as string | undefined);
+    throw new ErroApi(String(dados.mensagem ?? "Algo deu errado."), resp.status, dados.codigo as string | undefined, dados.motivo as string | undefined);
   }
   return dados as T;
 }
@@ -64,11 +67,15 @@ async function http<T>(
 // ---------- Eq. 1: Identidade ----------
 export async function entrar(email: string, senha: string): Promise<Usuario> {
   if (modoReal("IDENTIDADE")) {
-    const r = await http<{ token: string; id: string; nome: string; papel: Usuario["papel"] }>(urlDe("IDENTIDADE"), "/tokens", {
+    // Contrato do mock da Identidade (Eq. 1): POST /tokens {sub, papel, email, nome} -> {access_token}.
+    // Quando a Eq. 1 publicar o login real, só este bloco muda.
+    const id = email.split("@")[0].replace(/[^a-z0-9-]/gi, "-").toLowerCase();
+    const nome = id;
+    const r = await http<{ access_token: string }>(urlDe("IDENTIDADE"), "/tokens", {
       metodo: "POST",
-      corpo: { email, senha },
+      corpo: { sub: id, papel: "cliente", email, nome },
     });
-    return { id: r.id, nome: r.nome, email, papel: r.papel, token: r.token };
+    return { id, nome, email, papel: "cliente", token: r.access_token };
   }
   await espera();
   if (!email.includes("@") || senha.length < 3) throw new ErroApi("E-mail ou senha inválidos.", 401);
@@ -179,6 +186,17 @@ export async function pagar(
 ): Promise<Pagamento> {
   if (modoReal("FINANCEIRO")) {
     try {
+      // Enquanto a Eq. 3 não está no ar, registramos o pedido no mock dela para o Pagamentos poder consultá-lo.
+      await http(PEDIDOS_MOCK(), `/pedidos/${pedido.id}`, {
+        metodo: "PUT",
+        token: usuario.token,
+        corpo: {
+          cliente_id: usuario.id,
+          restaurante_id: pedido.restauranteId,
+          valor_total_centavos: pedido.totalCentavos,
+          status: "confirmado",
+        },
+      });
       const r = await http<{ id: string }>(PAGAMENTOS(), "/v1/pagamentos", {
         metodo: "POST",
         token: usuario.token,
@@ -188,7 +206,11 @@ export async function pagar(
       return { id: r.id, pedidoId: pedido.id, status: "aprovado" };
     } catch (e) {
       if (e instanceof ErroApi && e.codigo === "PAGAMENTO_RECUSADO") {
-        return { id: "", pedidoId: pedido.id, status: "recusado", motivoRecusa: e.message };
+        const motivos: Record<string, string> = {
+          saldo_insuficiente: "Saldo insuficiente.",
+          analise_antifraude: "Em análise antifraude.",
+        };
+        return { id: "", pedidoId: pedido.id, status: "recusado", motivoRecusa: motivos[e.motivo ?? ""] ?? "Recusado pelo emissor." };
       }
       throw e;
     }
@@ -211,6 +233,12 @@ export async function pagar(
 
 export async function avaliar(nova: NovaAvaliacao, usuario: Usuario): Promise<void> {
   if (modoReal("FINANCEIRO")) {
+    // A Eq. 4 ainda não existe: marcamos o pedido como entregue no mock da Eq. 3, que é o que Avaliações confere.
+    await http(PEDIDOS_MOCK(), `/pedidos/${nova.pedidoId}`, {
+      metodo: "PATCH",
+      token: usuario.token,
+      corpo: { status: "entregue" },
+    });
     await http(AVALIACOES(), "/v1/avaliacoes", {
       metodo: "POST",
       token: usuario.token,
