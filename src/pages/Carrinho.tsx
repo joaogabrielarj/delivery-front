@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { criarPedido, ErroApi, pagar, validarCupom } from "../api";
+import { criarPedido, ErroApi, pagar, validarCartao, validarCupom } from "../api";
 import type { DadosCartao, MetodoPagamento } from "../api/types";
 import { reais, useCarrinho, useSessao } from "../store";
 
@@ -52,12 +52,19 @@ export function Carrinho() {
       return;
     }
     setErro("");
+    if (metodo === "cartao_credito") {
+      const problema = validarCartao(cartao);
+      if (problema) {
+        setErro(problema);
+        return;
+      }
+    }
     setEnviando(true);
     try {
       const pedido = await criarPedido(restaurante, c.itens, c.cupom, usuario.id);
       const pagamento = await pagar(pedido, metodo, metodo === "cartao_credito" ? cartao : null, usuario);
       if (pagamento.status === "recusado") {
-        setErro(`Pagamento recusado: ${pagamento.motivoRecusa ?? "tente outro cartão"}.`);
+        setErro(`Pagamento recusado. ${pagamento.motivoRecusa ?? "Tente outro cartão."}`);
         return;
       }
       c.limpar();
